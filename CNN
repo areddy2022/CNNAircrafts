@@ -1,0 +1,131 @@
+# 1 is drone, 2 is fighter, 3 is helicopter, 4 is missile, 5 is passenger, 6 is rocket, 7 is sky
+
+from __future__ import absolute_import, division, print_function
+
+from turtle import pd
+
+import tensorflow as tf
+import seaborn as sns
+from tensorflow.keras import layers
+import warnings
+from sklearn.datasets import make_blobs
+from sklearn.model_selection import train_test_split
+import numpy as np
+import matplotlib.pyplot as plt
+
+warnings.filterwarnings("ignore")
+
+np.set_printoptions(precision=4)
+
+
+def data_reader():
+    train_ds = tf.keras.preprocessing.image_dataset_from_directory(
+        r"C:/Users/Abhinav Reddy/PycharmProjects/Seeker/venv/Data",
+        labels="inferred",
+        label_mode="int",
+        class_names=None,
+        color_mode="rgb",
+        batch_size=32,
+        image_size=(256, 256),
+        shuffle=True,
+        seed=123,
+        validation_split=0.1,
+        subset="training",
+        interpolation="bilinear",
+        follow_links=False,
+    )
+
+    val_ds = tf.keras.preprocessing.image_dataset_from_directory(
+        r"C:/Users/Abhinav Reddy/PycharmProjects/Seeker/venv/Data",
+        labels="inferred",
+        label_mode="int",
+        class_names=None,
+        color_mode="rgb",
+        batch_size=32,
+        image_size=(256, 256),
+        shuffle=True,
+        seed=123,
+        validation_split=0.1,
+        subset="validation",
+        interpolation="bilinear",
+        follow_links=False,
+    )
+
+    class_names = train_ds.class_names
+
+    plt.figure(figsize=(10, 10))
+    for images, labels in train_ds.take(1):
+        for i in range(7):
+            ax = plt.subplot(3, 3, i + 1)
+            plt.imshow(images[i].numpy().astype("uint8"))
+            plt.title(class_names[labels[i]])
+            plt.axis("off")
+
+    for image_batch, labels_batch in train_ds:
+        print(image_batch.shape)
+        print(labels_batch.shape)
+        break
+
+    return train_ds, val_ds
+
+
+def train(train_ds, val_ds):
+    normalization_layer = tf.keras.layers.experimental.preprocessing.Rescaling(1. / 255)
+    normalized_ds = train_ds.map(lambda x, y: (normalization_layer(x), y))
+    image_batch, labels_batch = next(iter(normalized_ds))
+    first_image = image_batch[0]
+    print(np.min(first_image), np.max(first_image))
+    AUTOTUNE = tf.data.experimental.AUTOTUNE
+    train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
+    val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
+    num_classes = 7
+    model = tf.keras.Sequential([
+        layers.experimental.preprocessing.Rescaling(1. / 255),
+        layers.Conv2D(32, 3, activation='relu'),
+        layers.MaxPooling2D(),
+        layers.Conv2D(32, 3, activation='relu'),
+        layers.MaxPooling2D(),
+        layers.Conv2D(32, 3, activation='relu'),
+        layers.MaxPooling2D(),
+        layers.Flatten(),
+        layers.Dense(128, activation='relu'),
+        layers.Dense(num_classes),
+        layers.Dropout(0.05),
+        layers.Dense(128, activation='relu'),
+        layers.Dense(num_classes),
+    ])
+
+    model.compile(
+        optimizer='adam',
+        loss=tf.losses.SparseCategoricalCrossentropy(from_logits=True),
+        metrics=['accuracy'])
+    model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=10
+    )
+
+    """print(val_ds.shape[1])
+    classes = {1, 2, 3, 4, 5, 6, 7}
+    (val_x, val_y) = tf.split(val_ds, 1, 1)
+    y_pred = model.predict_classes(val_x)
+    con_mat = tf.math.confusion_matrix(labels=val_y, predictions=y_pred).numpy()
+    con_mat_norm = np.around(con_mat.astype('float') / con_mat.sum(axis=1)[:, np.newaxis], decimals=2)
+    con_mat_df = pd.DataFrame(con_mat_norm,
+                              index=classes,
+                              columns=classes)
+    figure = plt.figure(figsize=(8, 8))
+    sns.heatmap(con_mat_df, annot=True, cmap=plt.cm.Blues)
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.show()"""
+
+
+def main():
+    train_ds, validation_ds = data_reader()
+    train(train_ds, validation_ds)
+
+
+if __name__ == "__main__":
+    main()
